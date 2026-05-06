@@ -1,3 +1,7 @@
+// Must be the first import — populates process.env from .env in dev before
+// ./config.js (or anything else) reads it. No-op in production.
+import './bootstrap-env.js';
+
 import { fileURLToPath } from 'node:url';
 import Fastify from 'fastify';
 import cors from '@fastify/cors';
