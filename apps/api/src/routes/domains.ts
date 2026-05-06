@@ -2,6 +2,9 @@ import type { FastifyInstance } from 'fastify';
 import { omegaEngine } from '../engine.js';
 
 export const domainRoutes = async (app: FastifyInstance): Promise<void> => {
+  app.addHook('preHandler', app.requireAuth);
+  app.addHook('preHandler', app.requireRateLimit);
+
   app.get('/', async () => {
     return omegaEngine.listDomains().map((d) => ({
       name: d.name,
