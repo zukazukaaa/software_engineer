@@ -1,0 +1,1 @@
+# Domain plug-ins live here. Each directory implements DomainAdapter from @omega/core.

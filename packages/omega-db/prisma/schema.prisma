@@ -1,0 +1,102 @@
+// ΩE Core — Prisma schema. Domain-agnostic root tables.
+
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["postgresqlExtensions"]
+}
+
+datasource db {
+  provider   = "postgresql"
+  url        = env("DATABASE_URL")
+  extensions = [pgvector(map: "vector")]
+}
+
+model Domain {
+  id        String   @id @default(cuid())
+  name      String   @unique
+  version   String
+  config    Json
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+
+  reasonings Reasoning[]
+  knowledge  KnowledgeEntry[]
+
+  @@index([active])
+}
+
+model Reasoning {
+  id       String @id @default(cuid())
+  domainId String
+  domain   Domain @relation(fields: [domainId], references: [id], onDelete: Cascade)
+
+  query  String
+  input  Json
+  output Json
+
+  uncertainty Float
+  confidence  Float
+
+  layersUsed     String[]
+  reasoningChain Json
+
+  cost    Float
+  latency Int
+
+  feedback Feedback?
+
+  createdAt DateTime @default(now())
+
+  @@index([domainId, createdAt])
+}
+
+model KnowledgeEntry {
+  id       String @id @default(cuid())
+  domainId String
+  domain   Domain @relation(fields: [domainId], references: [id], onDelete: Cascade)
+
+  type      String
+  content   String
+  embedding Unsupported("vector(1536)")?
+  source    String?
+
+  createdAt DateTime @default(now())
+
+  @@index([domainId, type])
+}
+
+model Feedback {
+  id          String    @id @default(cuid())
+  reasoningId String    @unique
+  reasoning   Reasoning @relation(fields: [reasoningId], references: [id], onDelete: Cascade)
+
+  correct       Boolean
+  actualOutcome Json?
+  notes         String?
+
+  createdAt DateTime @default(now())
+}
+
+model Experience {
+  id       String @id @default(cuid())
+  domainId String
+
+  pattern   String
+  embedding Unsupported("vector(1536)")?
+  outcome   Json
+  weight    Float  @default(1.0)
+
+  createdAt DateTime @default(now())
+
+  @@index([domainId])
+}
+
+model UserAuth {
+  id           String @id @default(cuid())
+  email        String @unique
+  passwordHash String
+  apiKey       String @unique
+  tier         String @default("FREE")
+
+  createdAt DateTime @default(now())
+}
