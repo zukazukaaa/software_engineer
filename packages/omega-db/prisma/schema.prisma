@@ -92,11 +92,27 @@ model Experience {
 }
 
 model UserAuth {
-  id           String @id @default(cuid())
-  email        String @unique
-  passwordHash String
-  apiKey       String @unique
-  tier         String @default("FREE")
+  id               String   @id @default(cuid())
+  email            String   @unique
+  passwordHash     String
+  tier             String   @default("FREE")
+  refreshTokenHash String?
+  createdAt        DateTime @default(now())
 
-  createdAt DateTime @default(now())
+  apiKeys ApiKey[]
+
+  @@index([tier])
+}
+
+model ApiKey {
+  id         String    @id @default(cuid())
+  userId     String
+  user       UserAuth  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  hashedKey  String    @unique
+  prefix     String
+  name       String
+  lastUsedAt DateTime?
+  createdAt  DateTime  @default(now())
+
+  @@index([userId])
 }

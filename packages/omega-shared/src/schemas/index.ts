@@ -33,3 +33,4 @@ export * from './ai.schema.js';
 export * from './omega-input.schema.js';
 export * from './feedback.schema.js';
 export * from './knowledge-entry.schema.js';
+export * from './auth.schema.js';

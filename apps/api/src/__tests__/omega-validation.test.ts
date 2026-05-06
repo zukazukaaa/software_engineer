@@ -1,23 +1,45 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { InMemoryAuthStore } from '../auth/in-memory-store.js';
+import { type TokenConfig } from '../auth/tokens.js';
+import { NoopRateLimiter } from '../rate-limit/noop.js';
 import { buildServer } from '../server.js';
 
-// Use the inferred return type — Fastify's generics depend on the concrete
-// logger we pass into buildServer(), so we don't import FastifyInstance.
+const TEST_TOKEN_CONFIG: TokenConfig = {
+  accessSecret: 'test-access-secret',
+  refreshSecret: 'test-refresh-secret',
+  accessExpiresIn: '15m',
+  refreshExpiresIn: '7d',
+};
+
 let app: Awaited<ReturnType<typeof buildServer>>;
+let apiKey: string;
 
 beforeAll(async () => {
-  app = await buildServer();
+  app = await buildServer({
+    authStore: new InMemoryAuthStore(),
+    rateLimiter: new NoopRateLimiter(),
+    tokenConfig: TEST_TOKEN_CONFIG,
+  });
+  const reg = await app.inject({
+    method: 'POST',
+    url: '/api/auth/register',
+    payload: { email: 'validator@example.com', password: 'Secret123' },
+  });
+  apiKey = reg.json().apiKey.token;
 });
 
 afterAll(async () => {
   await app.close();
 });
 
-describe('POST /api/omega/reason — strict validation', () => {
+const authHeaders = () => ({ 'x-api-key': apiKey });
+
+describe('POST /api/omega/reason — strict validation (authenticated)', () => {
   it('200 happy path: full valid payload returns the 11-step ΩE chain', async () => {
     const res = await app.inject({
       method: 'POST',
       url: '/api/omega/reason',
+      headers: authHeaders(),
       payload: {
         query: 'will it rain tomorrow?',
         domain: 'mock',
@@ -93,12 +115,13 @@ describe('POST /api/omega/reason — strict validation', () => {
     const res = await app.inject({
       method: 'POST',
       url: '/api/omega/reason',
+      headers: authHeaders(),
       payload: {
         query: 'q',
         domain: 'mock',
         layers: {
           K: {
-            facts: [{ id: 'f1', statement: 's' }], // missing `weight`
+            facts: [{ id: 'f1', statement: 's' }],
             rules: [],
           },
         },
@@ -120,6 +143,7 @@ describe('POST /api/omega/reason — strict validation', () => {
     const res = await app.inject({
       method: 'POST',
       url: '/api/omega/reason',
+      headers: authHeaders(),
       payload: {
         query: 'q',
         domain: 'mock',
@@ -149,6 +173,7 @@ describe('POST /api/omega/reason — strict validation', () => {
     const res = await app.inject({
       method: 'POST',
       url: '/api/omega/reason',
+      headers: authHeaders(),
       payload: {
         query: 'q',
         domain: 'mock',

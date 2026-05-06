@@ -36,6 +36,9 @@ const formatIssue = (issue: ZodIssue): FormattedIssue => {
 };
 
 export const omegaRoutes = async (app: FastifyInstance): Promise<void> => {
+  app.addHook('preHandler', app.requireAuth);
+  app.addHook('preHandler', app.requireRateLimit);
+
   app.post('/reason', async (request, reply) => {
     const parsed = omegaInputSchema.safeParse(request.body);
     if (!parsed.success) {
