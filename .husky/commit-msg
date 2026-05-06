@@ -1,0 +1,69 @@
+#!/usr/bin/env sh
+# ΩE Core protection — local pre-commit gate.
+#
+# Implemented as commit-msg (not pre-commit) because git's pre-commit
+# hook runs *before* the commit message is built, so the
+# [CORE-MIGRATION] tag is unreadable there. commit-msg fires after the
+# message is finalized but before the commit object is created;
+# exiting non-zero aborts the commit.
+#
+# POSIX shell only — works on macOS, Linux, Git Bash on Windows.
+
+set -e
+
+COMMIT_MSG_FILE="$1"
+
+# Glob the protected paths. POSIX ERE, no GNU-only flags.
+PROTECTED_REGEX='^packages/omega-core/src/(reasoning-engine|intelligence-layers|domain-registry)/|^packages/omega-core/src/types\.ts$'
+
+STAGED=$(git diff --cached --name-only --diff-filter=ACMRTUXB)
+
+# Fast path: nothing staged or nothing protected — exit immediately.
+if [ -z "$STAGED" ]; then
+  exit 0
+fi
+
+if ! printf '%s\n' "$STAGED" | grep -qE "$PROTECTED_REGEX"; then
+  exit 0
+fi
+
+# Bypass 1: a MIGRATION.md file is staged in the same commit.
+if printf '%s\n' "$STAGED" | grep -q '^MIGRATION\.md$'; then
+  printf '\033[32mΩE Core change detected — MIGRATION.md is staged. Allowing commit.\033[0m\n'
+  exit 0
+fi
+
+# Bypass 2: commit message contains [CORE-MIGRATION].
+if grep -qF '[CORE-MIGRATION]' "$COMMIT_MSG_FILE"; then
+  printf '\033[32mΩE Core change detected — [CORE-MIGRATION] tag present. Allowing commit.\033[0m\n'
+  exit 0
+fi
+
+# Block.
+cat >&2 <<'EOF'
+
+✗ ΩE Core protection: this commit touches the immutable reasoning root.
+
+  Protected paths:
+    packages/omega-core/src/reasoning-engine/
+    packages/omega-core/src/intelligence-layers/
+    packages/omega-core/src/domain-registry/
+    packages/omega-core/src/types.ts
+
+  ΩE Core implements the laws Ω → ΩN → ΩE. Changes ripple to every
+  domain plug-in, so they must be deliberate, documented, reviewed.
+
+  To proceed with a deliberate core change, do ONE of:
+
+    a) Stage a MIGRATION.md file alongside your changes:
+         git add MIGRATION.md
+         git commit ...
+
+    b) Tag the commit message with [CORE-MIGRATION]:
+         git commit -m "[CORE-MIGRATION] reorder Ω vs ΩN ..."
+
+  Last resort: --no-verify bypasses the hook.
+  This is intentional friction, not security — it forces a pause.
+
+EOF
+exit 1
