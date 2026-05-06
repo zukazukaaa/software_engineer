@@ -1,0 +1,19 @@
+# ΩE Core ownership.
+#
+# These paths are the immutable reasoning root. Any PR touching them
+# requires explicit @zukazukaaa approval.  The pre-commit hook
+# (.husky/commit-msg) and CI workflow (.github/workflows/core-protection.yml)
+# enforce the same rule procedurally; CODEOWNERS enforces it via GitHub
+# review settings.
+
+# Reasoning engine — Ω → ΩN → ΩE pipeline
+packages/omega-core/src/reasoning-engine/        @zukazukaaa
+
+# 7 + 4 layers (K, I, O, C, E, P, L, H, N, S, AI)
+packages/omega-core/src/intelligence-layers/     @zukazukaaa
+
+# Plug-in registry contract
+packages/omega-core/src/domain-registry/         @zukazukaaa
+
+# Public type contracts
+packages/omega-core/src/types.ts                 @zukazukaaa

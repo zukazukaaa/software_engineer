@@ -1,0 +1,84 @@
+name: ΩE Core protection
+
+# Authoritative gate for changes to the immutable reasoning root.
+# The local commit-msg hook (.husky/commit-msg) enforces the same rule
+# pre-push; this workflow enforces it for PRs (including PRs from forks
+# and the GitHub web editor where local hooks don't run).
+#
+# Protection rule: any PR that modifies the protected ΩE Core paths must
+# include EITHER a MIGRATION.md file OR the literal tag [CORE-MIGRATION]
+# in the PR description.
+#
+# This check should be marked as a required status check on the `main`
+# branch via repo settings → Branches → Branch protection rules.
+
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  core-protection:
+    name: ΩE Core change requires migration
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Detect protected-path changes
+        id: detect
+        run: |
+          set -e
+          PROTECTED_REGEX='^packages/omega-core/src/(reasoning-engine|intelligence-layers|domain-registry)/|^packages/omega-core/src/types\.ts$'
+          BASE_SHA="${{ github.event.pull_request.base.sha }}"
+          HEAD_SHA="${{ github.event.pull_request.head.sha }}"
+
+          CHANGED=$(git diff --name-only "$BASE_SHA" "$HEAD_SHA" | grep -E "$PROTECTED_REGEX" || true)
+
+          if [ -z "$CHANGED" ]; then
+            echo "core-touched=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::PR does not touch ΩE Core protected paths."
+            exit 0
+          fi
+
+          echo "core-touched=true" >> "$GITHUB_OUTPUT"
+          {
+            echo "core-files<<__EOF__"
+            echo "$CHANGED"
+            echo "__EOF__"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Verify migration evidence
+        if: steps.detect.outputs.core-touched == 'true'
+        env:
+          # PR description is authoritative — head commit messages can lie.
+          PR_BODY: ${{ github.event.pull_request.body }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -e
+
+          echo "Protected files in this PR:"
+          echo "${{ steps.detect.outputs.core-files }}"
+          echo ""
+
+          # Bypass 1: MIGRATION.md added or modified in this PR.
+          if git diff --name-only "$BASE_SHA" "$HEAD_SHA" | grep -q '^MIGRATION\.md$'; then
+            echo "::notice::ΩE Core change accompanied by MIGRATION.md — gate cleared."
+            exit 0
+          fi
+
+          # Bypass 2: PR description contains the literal [CORE-MIGRATION] tag.
+          if printf '%s' "$PR_BODY" | grep -qF '[CORE-MIGRATION]'; then
+            echo "::notice::ΩE Core change tagged [CORE-MIGRATION] in PR description — gate cleared."
+            exit 0
+          fi
+
+          echo "::error title=ΩE Core protection failed::PR #$PR_NUMBER touches the immutable reasoning root but neither MIGRATION.md nor [CORE-MIGRATION] is present. See README → Core Protection."
+          exit 1
