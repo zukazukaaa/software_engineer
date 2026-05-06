@@ -1,0 +1,54 @@
+{
+  "name": "@omega/core",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "development": "./src/index.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    },
+    "./types": {
+      "types": "./dist/types.d.ts",
+      "development": "./src/types.ts",
+      "import": "./dist/types.js",
+      "default": "./dist/types.js"
+    },
+    "./layers": {
+      "types": "./dist/intelligence-layers/index.d.ts",
+      "development": "./src/intelligence-layers/index.ts",
+      "import": "./dist/intelligence-layers/index.js",
+      "default": "./dist/intelligence-layers/index.js"
+    },
+    "./engine": {
+      "types": "./dist/reasoning-engine/index.d.ts",
+      "development": "./src/reasoning-engine/index.ts",
+      "import": "./dist/reasoning-engine/index.js",
+      "default": "./dist/reasoning-engine/index.js"
+    },
+    "./registry": {
+      "types": "./dist/domain-registry/index.d.ts",
+      "development": "./src/domain-registry/index.ts",
+      "import": "./dist/domain-registry/index.js",
+      "default": "./dist/domain-registry/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run",
+    "lint": "echo 'lint stub'"
+  },
+  "dependencies": {
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "typescript": "^5.6.3",
+    "vitest": "^2.1.5",
+    "@types/node": "^22.10.0"
+  }
+}
