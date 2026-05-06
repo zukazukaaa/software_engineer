@@ -1,3 +1,4 @@
+import { fileURLToPath } from 'node:url';
 import Fastify from 'fastify';
 import cors from '@fastify/cors';
 import helmet from '@fastify/helmet';
@@ -22,8 +23,8 @@ export const buildServer = async () => {
   return app;
 };
 
-const isMain = import.meta.url === `file://${process.argv[1]}`;
-if (isMain) {
+const entry = process.argv[1] ? fileURLToPath(import.meta.url) === process.argv[1] : false;
+if (entry) {
   buildServer()
     .then((app) => app.listen({ host: config.API_HOST, port: config.API_PORT }))
     .then((addr) => logger.info({ addr }, 'ΩE API listening'))

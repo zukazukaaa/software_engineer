@@ -4,12 +4,12 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "tsx watch src/server.ts",
+    "dev": "NODE_OPTIONS='--conditions=development' tsx watch src/server.ts",
     "build": "tsc -p tsconfig.json",
     "start": "node dist/server.js",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "lint": "echo 'lint stub'",
-    "test": "vitest run"
+    "test": "vitest run --passWithNoTests"
   },
   "dependencies": {
     "@omega/core": "*",

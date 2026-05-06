@@ -4,7 +4,6 @@ import type {
   NexusLayers,
   OmegaInput,
   OmegaOptions,
-  AnyLayerKey,
 } from '@omega/core';
 import { reasonRequestSchema } from '@omega/shared';
 import { omegaEngine } from '../engine.js';
@@ -55,5 +54,3 @@ export const omegaRoutes = async (app: FastifyInstance): Promise<void> => {
     return reply.send(adapter.formatOutput(output));
   });
 };
-
-export const _intellisenseGuard: AnyLayerKey | null = null;

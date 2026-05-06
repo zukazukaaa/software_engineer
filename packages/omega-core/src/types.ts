@@ -44,12 +44,12 @@ export interface InformationSignal {
 }
 
 export interface ObservationLayer {
-  observations: Observation[];
+  observations: ObservationRecord[];
   source: string;
   capturedAt: Date;
 }
 
-export interface Observation {
+export interface ObservationRecord {
   id: string;
   channel: string; // 'sensor', 'feed', 'manual', etc.
   value: unknown;

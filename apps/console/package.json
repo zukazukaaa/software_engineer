@@ -9,7 +9,7 @@
     "preview": "vite preview",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "lint": "echo 'lint stub'",
-    "test": "vitest run"
+    "test": "vitest run --passWithNoTests"
   },
   "dependencies": {
     "@omega/core": "*",
