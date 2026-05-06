@@ -13,9 +13,13 @@
     "dev": "turbo run dev",
     "lint": "turbo run lint",
     "test": "turbo run test",
+    "test:unit": "turbo run test:unit",
+    "test:integration": "bash scripts/test-integration.sh",
     "typecheck": "turbo run typecheck",
     "db:generate": "turbo run db:generate",
     "db:migrate": "turbo run db:migrate",
+    "db:deploy": "turbo run db:deploy",
+    "db:seed": "turbo run db:seed",
     "prepare": "husky || true"
   },
   "devDependencies": {
