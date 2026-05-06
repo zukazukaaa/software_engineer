@@ -4,8 +4,15 @@
  * IMMUTABLE: this class implements the ΩE laws. Changing the order of
  * operations (Ω → ΩN → ΩE) is a breaking semantic change and must go through
  * a deliberate migration.
+ *
+ * Domain ownership lives entirely in {@link DomainRegistry}. The engine
+ * delegates registration, lookup, and listing to the registry so there is a
+ * single source of truth for plug-ins. A registry can be injected via
+ * {@link OmegaEngineOptions.domainRegistry}; if omitted the engine creates
+ * its own.
  */
 
+import { DomainRegistry } from '../domain-registry/registry.js';
 import {
   DEFAULT_INTELLIGENCE_LAYERS,
   DEFAULT_NEXUS_LAYERS,
@@ -30,41 +37,53 @@ export interface OmegaEngineOptions {
   intelligenceLayers?: Partial<Record<IntelligenceLayerKey, IntelligenceLayer>>;
   nexusLayers?: Partial<Record<NexusLayerKey, NexusLayer>>;
   onStep?: (step: ReasoningStep) => void;
+  /**
+   * Inject a shared DomainRegistry. Useful when the registry is owned by an
+   * outer module (DI, tests, multi-engine setups). If omitted the engine
+   * creates a private registry on construction.
+   */
+  domainRegistry?: DomainRegistry;
 }
 
 export class OmegaEngine {
   private readonly intelligence: Record<IntelligenceLayerKey, IntelligenceLayer>;
   private readonly nexus: Record<NexusLayerKey, NexusLayer>;
-  private readonly domains = new Map<string, DomainAdapter>();
+  private readonly domainRegistry: DomainRegistry;
   private readonly onStep?: (step: ReasoningStep) => void;
 
   constructor(opts: OmegaEngineOptions = {}) {
     this.intelligence = { ...DEFAULT_INTELLIGENCE_LAYERS, ...(opts.intelligenceLayers ?? {}) };
     this.nexus = { ...DEFAULT_NEXUS_LAYERS, ...(opts.nexusLayers ?? {}) };
+    this.domainRegistry = opts.domainRegistry ?? new DomainRegistry();
     this.onStep = opts.onStep;
   }
 
+  /** Read-only access to the underlying registry. */
+  get registry(): DomainRegistry {
+    return this.domainRegistry;
+  }
+
   registerDomain(domain: DomainAdapter): void {
-    if (this.domains.has(domain.name)) {
-      throw new Error(`Domain '${domain.name}' already registered`);
-    }
-    this.domains.set(domain.name, domain);
+    this.domainRegistry.register(domain);
   }
 
   unregisterDomain(name: string): boolean {
-    return this.domains.delete(name);
+    return this.domainRegistry.unregister(name);
   }
 
   hasDomain(name: string): boolean {
-    return this.domains.has(name);
+    return this.domainRegistry.isActive(name);
   }
 
   listDomains(): DomainAdapter[] {
-    return Array.from(this.domains.values());
+    return this.domainRegistry
+      .list()
+      .filter((entry) => entry.active)
+      .map((entry) => entry.adapter);
   }
 
   getDomain(name: string): DomainAdapter | undefined {
-    return this.domains.get(name);
+    return this.domainRegistry.get(name);
   }
 
   /**

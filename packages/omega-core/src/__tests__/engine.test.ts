@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { OmegaEngine } from '../reasoning-engine/index.js';
-import { MockDomain } from '../domain-registry/index.js';
+import { DomainRegistry, MockDomain } from '../domain-registry/index.js';
 import type { OmegaInput } from '../types.js';
 
 describe('OmegaEngine', () => {
@@ -61,5 +61,30 @@ describe('OmegaEngine', () => {
     expect(engine.listDomains()).toHaveLength(1);
     expect(() => engine.registerDomain(domain)).toThrow();
     expect(engine.unregisterDomain('mock')).toBe(true);
+  });
+
+  it('delegates to a single DomainRegistry — registering via engine is visible via registry.list()', () => {
+    const registry = new DomainRegistry();
+    const engine = new OmegaEngine({ domainRegistry: registry });
+    const domain = new MockDomain();
+
+    engine.registerDomain(domain);
+
+    // The injected registry is the same instance the engine uses.
+    expect(engine.registry).toBe(registry);
+
+    // Registration through the engine surfaces in registry.list().
+    const entries = registry.list();
+    expect(entries).toHaveLength(1);
+    expect(entries[0]?.adapter).toBe(domain);
+    expect(entries[0]?.active).toBe(true);
+
+    // Bypassing the engine and registering directly on the registry is
+    // also visible through the engine — proving a single source of truth.
+    const second = new MockDomain();
+    Object.defineProperty(second, 'name', { value: 'mock-2' });
+    registry.register(second);
+    expect(engine.hasDomain('mock-2')).toBe(true);
+    expect(engine.listDomains()).toHaveLength(2);
   });
 });
