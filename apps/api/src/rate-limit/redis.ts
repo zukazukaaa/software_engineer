@@ -59,6 +59,7 @@ export class RedisRateLimiter implements RateLimiter {
           retryAfter: Math.max(1, dayTtl),
           window: 'day',
           limit: limits.rpd,
+          reason: 'limit',
         };
       }
       if (limits.rph !== null && hourCount > limits.rph) {
@@ -68,6 +69,7 @@ export class RedisRateLimiter implements RateLimiter {
           retryAfter: Math.max(1, hourTtl),
           window: 'hour',
           limit: limits.rph,
+          reason: 'limit',
         };
       }
       return { allowed: true };
@@ -80,8 +82,7 @@ export class RedisRateLimiter implements RateLimiter {
       return {
         allowed: false,
         retryAfter: 5,
-        window: 'hour',
-        limit: 0,
+        reason: 'unavailable',
       };
     }
   }

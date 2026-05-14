@@ -12,6 +12,14 @@ export interface RateLimitDecision {
   window?: 'hour' | 'day';
   /** Limit value of the violated window, for logs. */
   limit?: number;
+  /**
+   * Why the request was blocked. The plugin maps this to an HTTP status:
+   *   'limit'       → 429 Too Many Requests (legitimate quota hit)
+   *   'unavailable' → 503 Service Unavailable (limiter back-end down,
+   *                   running fail-closed)
+   * Undefined or 'limit' is treated as 429.
+   */
+  reason?: 'limit' | 'unavailable';
 }
 
 export interface RateLimiter {

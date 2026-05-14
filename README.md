@@ -49,24 +49,95 @@ omega-emergence/
 `packages/omega-core/` and `packages/omega-db/schema.prisma` are the immutable
 root. Domains are mutable branches.
 
-## Quickstart
+## Quick start
 
 ```bash
+git clone <this-repo> && cd software_engineer
 cp .env.example .env
+npm install                 # also runs prisma generate (postinstall)
 docker compose up -d        # Postgres (pgvector) + Redis
-npm install
-npm run db:generate
-npm run db:migrate
-npm run dev
+npm run db:deploy           # apply migrations to the dev DB
+npm run db:seed             # one ENTERPRISE admin + the mock domain
+npm run dev                 # API on :4000, console on :5173
 ```
 
-The API listens on `http://localhost:4000`, the console on
-`http://localhost:5173`.
+After `npm run dev` is running:
+
+```bash
+curl http://localhost:4000/health         # liveness  → 200
+curl http://localhost:4000/health/ready   # readiness → 200 with db+redis ok
+```
+
+## Architecture overview
+
+```
+omega-emergence/
+├── apps/
+│   ├── api/            Fastify backend  (auth, /api/omega/reason, health)
+│   └── console/        React + Vite frontend
+├── packages/
+│   ├── omega-core/     IMMUTABLE — ΩE engine, layers, registry
+│   ├── omega-db/       Prisma schema + Postgres client (pgvector)
+│   └── omega-shared/   Zod schemas + tier constants
+├── domains/            MUTABLE — domain plug-ins (empty by design)
+├── docker-compose.yml      Dev services (Postgres 5432, Redis 6379)
+├── docker-compose.test.yml Test-only services (Postgres 5433, Redis 6380)
+└── scripts/test-integration.sh
+```
+
+`packages/omega-core/{reasoning-engine,intelligence-layers,domain-registry}/` and
+`packages/omega-core/src/types.ts` are the immutable root (CODEOWNERS +
+Husky + CI gate). Domains are mutable branches.
+
+## Environment variables
+
+| Var | Required | Default | Notes |
+| --- | --- | --- | --- |
+| `NODE_ENV` | yes | `development` | `development` \| `production` \| `test` |
+| `DATABASE_URL` | yes | — | matches docker-compose service `postgres` |
+| `REDIS_URL` | yes | — | matches docker-compose service `redis` |
+| `REDIS_FAIL_MODE` | no | `closed` | `open` (allow on outage) \| `closed` (503 on outage) |
+| `JWT_SECRET` | yes | — | ≥32 random bytes in prod |
+| `JWT_REFRESH_SECRET` | yes | — | ≥32 random bytes in prod |
+| `JWT_EXPIRES_IN` | no | `15m` | jsonwebtoken duration |
+| `JWT_REFRESH_EXPIRES_IN` | no | `7d` | jsonwebtoken duration |
+| `API_HOST` | no | `0.0.0.0` | |
+| `API_PORT` | no | `4000` | |
+| `LOG_LEVEL` | no | `info` | pino level |
+
+`apps/api/src/config/env.ts` validates these at boot; on failure it logs
+every issue and exits 1.
+
+## Running tests
+
+```bash
+npm run test:unit            # vitest with mocks; needs no services
+npm run test:integration     # spins up docker-compose.test.yml,
+                             # applies migrations, runs the suite,
+                             # tears down — driven by scripts/test-integration.sh
+```
+
+`npm run test` runs the unit pass via Turbo. Integration tests are not in
+the default `test` task because they need Docker and ports 5433/6380.
+
+## Troubleshooting
+
+- **`prisma generate` fails on install** — the `postinstall` in `@omega/db`
+  expects the Prisma CLI; if `npm install` was interrupted, re-run it.
+- **`docker compose up -d` fails with port conflict** — check whether you
+  already have a Postgres/Redis on 5432/6379 (or 5433/6380 for the test
+  compose). Stop them or remap ports in compose.
+- **`/health/ready` returns 503** — inspect the `checks` field; one of
+  `db.error` or `redis.error` will name the failure. Most often DATABASE_URL
+  or REDIS_URL points at the wrong host/port.
+- **Tests can't find the Prisma client** — run `npm run db:generate` from
+  the repo root. CI should run this before `test`.
+- **Husky hook blocking your commit** — see *Core Protection* below.
 
 ## Phases
 
-See the project brief for the full roadmap. The current commit ships Phase 0
-foundation + Phase 1 ΩE Core scaffolding (types, layers, engine, registry).
+Phase 0/1 foundation + Phase 1 auth/rate-limit + Sprint A real services.
+See the project brief for the full roadmap.
 
 ## Core Protection
 

@@ -1,14 +1,15 @@
-// Must be the first import — populates process.env from .env in dev before
-// ./config.js (or anything else) reads it. No-op in production.
+// Must be the first import — populates process.env from .env in dev
+// before ./config/env reads it. No-op in production.
 import './bootstrap-env.js';
 
 import { fileURLToPath } from 'node:url';
 import Fastify from 'fastify';
 import cors from '@fastify/cors';
 import helmet from '@fastify/helmet';
-import { Redis } from 'ioredis';
-import { config } from './config.js';
+import { connectPrisma, disconnectPrisma, getPrisma } from '@omega/db';
+import { env } from './config/env.js';
 import { logger } from './logger.js';
+import { closeRedis, initRedis } from './redis/client.js';
 import { healthRoutes } from './routes/health.js';
 import { omegaRoutes } from './routes/omega.js';
 import { domainRoutes } from './routes/domains.js';
@@ -17,11 +18,10 @@ import { authRoutes } from './routes/auth.js';
 import authPlugin from './plugins/auth.js';
 import rateLimitPlugin from './plugins/rate-limit.js';
 import { InMemoryAuthStore } from './auth/in-memory-store.js';
+import { PrismaAuthStore } from './auth/prisma-store.js';
 import type { AuthStore } from './auth/types.js';
 import type { TokenConfig } from './auth/tokens.js';
 import type { RateLimiter } from './rate-limit/types.js';
-import { InMemoryRateLimiter } from './rate-limit/in-memory.js';
-import { NoopRateLimiter } from './rate-limit/noop.js';
 import { RedisRateLimiter } from './rate-limit/redis.js';
 
 export interface BuildServerOptions {
@@ -31,26 +31,26 @@ export interface BuildServerOptions {
 }
 
 const resolveTokenConfig = (override?: Partial<TokenConfig>): TokenConfig => ({
-  accessSecret: override?.accessSecret ?? config.JWT_SECRET,
-  refreshSecret: override?.refreshSecret ?? config.JWT_REFRESH_SECRET,
-  accessExpiresIn: override?.accessExpiresIn ?? config.JWT_EXPIRES_IN,
-  refreshExpiresIn: override?.refreshExpiresIn ?? config.JWT_REFRESH_EXPIRES_IN,
+  accessSecret: override?.accessSecret ?? env.JWT_SECRET,
+  refreshSecret: override?.refreshSecret ?? env.JWT_REFRESH_SECRET,
+  accessExpiresIn: override?.accessExpiresIn ?? env.JWT_EXPIRES_IN,
+  refreshExpiresIn: override?.refreshExpiresIn ?? env.JWT_REFRESH_EXPIRES_IN,
 });
 
-const resolveRateLimiter = (): RateLimiter => {
-  if (!config.REDIS_URL) {
-    if (config.NODE_ENV === 'production') {
-      logger.warn('REDIS_URL not set in production — using in-memory limiter (NOT cluster-safe)');
-      return new InMemoryRateLimiter();
-    }
-    logger.info('REDIS_URL not set — using no-op rate limiter for dev');
-    return new NoopRateLimiter();
+const resolveDefaultAuthStore = (): AuthStore => {
+  // Tests inject InMemoryAuthStore explicitly; this default kicks in
+  // when buildServer({}) is called without overrides — i.e. real
+  // dev / staging / prod against a real Postgres.
+  if (env.NODE_ENV === 'test') {
+    return new InMemoryAuthStore();
   }
-  // lazy connect to avoid crashing the server if Redis is briefly unreachable
-  const client = new Redis(config.REDIS_URL, { lazyConnect: true, maxRetriesPerRequest: 1 });
-  client.on('error', (err) => logger.warn({ err }, 'redis connection error'));
+  return new PrismaAuthStore(getPrisma());
+};
+
+const resolveDefaultRateLimiter = (): RateLimiter => {
+  const client = initRedis({ url: env.REDIS_URL });
   return new RedisRateLimiter(client, {
-    failOpen: config.NODE_ENV !== 'production',
+    failOpen: env.REDIS_FAIL_MODE === 'open',
     logger,
   });
 };
@@ -61,8 +61,8 @@ export const buildServer = async (opts: BuildServerOptions = {}) => {
   await app.register(helmet);
   await app.register(cors, { origin: true });
 
-  const authStore = opts.authStore ?? new InMemoryAuthStore();
-  const rateLimiter = opts.rateLimiter ?? resolveRateLimiter();
+  const authStore = opts.authStore ?? resolveDefaultAuthStore();
+  const rateLimiter = opts.rateLimiter ?? resolveDefaultRateLimiter();
   const tokenConfig = resolveTokenConfig(opts.tokenConfig);
 
   await app.register(authPlugin, { authStore, tokenConfig });
@@ -79,11 +79,33 @@ export const buildServer = async (opts: BuildServerOptions = {}) => {
 
 const entry = process.argv[1] ? fileURLToPath(import.meta.url) === process.argv[1] : false;
 if (entry) {
-  buildServer()
-    .then((app) => app.listen({ host: config.API_HOST, port: config.API_PORT }))
-    .then((addr) => logger.info({ addr }, 'ΩE API listening'))
-    .catch((err) => {
-      logger.error(err, 'failed to start');
+  const start = async () => {
+    // Connect dependencies early so we fail fast on bad URLs.
+    initRedis({ url: env.REDIS_URL });
+    await connectPrisma().catch((err) => {
+      logger.error({ err }, 'Postgres connection failed at boot');
       process.exit(1);
     });
+
+    const app = await buildServer();
+    const addr = await app.listen({ host: env.API_HOST, port: env.API_PORT });
+    logger.info({ addr }, 'ΩE API listening');
+
+    const shutdown = async (signal: NodeJS.Signals) => {
+      logger.info({ signal }, 'shutting down');
+      try {
+        await app.close();
+        await disconnectPrisma();
+        await closeRedis();
+      } finally {
+        process.exit(0);
+      }
+    };
+    process.on('SIGTERM', shutdown);
+    process.on('SIGINT', shutdown);
+  };
+  start().catch((err) => {
+    logger.error(err, 'failed to start');
+    process.exit(1);
+  });
 }
